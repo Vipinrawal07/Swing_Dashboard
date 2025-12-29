@@ -1,11 +1,22 @@
-import snscrape.modules.twitter as sntwitter
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+try:
+    import snscrape.modules.twitter as sntwitter
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+    analyzer = SentimentIntensityAnalyzer()
+except:
+    sntwitter = None
 
-analyzer = SentimentIntensityAnalyzer()
+def twitter_sentiment(query):
+    if not sntwitter:
+        return 0  # fallback safely
 
-def twitter_sentiment(q):
     scores = []
-    for i, tweet in enumerate(sntwitter.TwitterSearchScraper(q).get_items()):
-        if i > 50: break
-        scores.append(analyzer.polarity_scores(tweet.content)["compound"])
-    return sum(scores)/len(scores) if scores else 0
+    for i, tweet in enumerate(
+        sntwitter.TwitterSearchScraper(query).get_items()
+    ):
+        if i >= 30:
+            break
+        scores.append(
+            analyzer.polarity_scores(tweet.content)["compound"]
+        )
+
+    return sum(scores) / len(scores) if scores else 0
