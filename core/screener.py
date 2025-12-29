@@ -1,14 +1,42 @@
+import pandas as pd
+import numpy as np
+
+# -------- Helper functions --------
+def compute_rsi(close, period=14):
+    delta = close.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+
+    rs = avg_gain / avg_loss
+    return 100 - (100 / (1 + rs))
+
+
+def compute_atr(high, low, close, period=14):
+    tr = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
+    ], axis=1).max(axis=1)
+    return tr.rolling(period).mean()
+
+
+# -------- Main Swing Screen Function --------
 def swing_screen(df):
     if df is None or df.empty or len(df) < 220:
         return None
 
     df = df.copy()
 
+    # Force Series
     close = df["Close"].squeeze()
     high = df["High"].squeeze()
     low = df["Low"].squeeze()
     volume = df["Volume"].squeeze()
 
+    # Indicators
     df["SMA50"] = close.rolling(50).mean()
     df["SMA200"] = close.rolling(200).mean()
     df["RSI"] = compute_rsi(close)
@@ -16,6 +44,7 @@ def swing_screen(df):
     df["ATR_pct"] = df["ATR"] / close
     df["Vol_Avg"] = volume.rolling(20).mean()
 
+    # Boolean mask to avoid NaNs
     valid = (
         df["SMA50"].notna() &
         df["SMA200"].notna() &
@@ -23,14 +52,13 @@ def swing_screen(df):
         df["ATR_pct"].notna() &
         df["Vol_Avg"].notna()
     )
-
     df = df.loc[valid]
     if df.empty:
         return None
 
     latest = df.iloc[-1]
 
-    # --- Convert all to floats before any comparison ---
+    # Convert to floats
     try:
         close_val = float(latest["Close"])
         sma50_val = float(latest["SMA50"])
@@ -42,6 +70,7 @@ def swing_screen(df):
     except:
         return None
 
+    # Swing Conditions
     trend = close_val > sma200_val
     institutional = sma50_val > sma200_val
     momentum_reset = 40 <= rsi_val <= 65
