@@ -25,7 +25,7 @@ def compute_atr(high, low, close, period=14):
 
 
 def swing_screen(df):
-    # -------- SAFETY CHECKS --------
+    # -------- HARD SAFETY GUARDS --------
     if df is None or df.empty:
         return None
 
@@ -34,7 +34,7 @@ def swing_screen(df):
 
     df = df.copy()
 
-    # -------- FORCE SERIES (CRITICAL FIX) --------
+    # -------- FORCE SERIES (CRITICAL) --------
     close = df["Close"].squeeze()
     high = df["High"].squeeze()
     low = df["Low"].squeeze()
@@ -45,23 +45,26 @@ def swing_screen(df):
     df["SMA200"] = close.rolling(200).mean()
     df["RSI"] = compute_rsi(close)
     df["ATR"] = compute_atr(high, low, close)
-
-    # % ATR (risk control)
-    df["ATR_pct"] = df["ATR"].div(close)
-
-    # Volume confirmation
+    df["ATR_pct"] = df["ATR"] / close
     df["Vol_Avg"] = volume.rolling(20).mean()
 
-    # -------- DROP NANs SAFELY --------
-    required_cols = ["SMA50", "SMA200", "RSI", "ATR_pct", "Vol_Avg"]
-    df = df.dropna(subset=required_cols)
+    # -------- BOOLEAN MASK (NO dropna EVER) --------
+    valid = (
+        df["SMA50"].notna() &
+        df["SMA200"].notna() &
+        df["RSI"].notna() &
+        df["ATR_pct"].notna() &
+        df["Vol_Avg"].notna()
+    )
+
+    df = df.loc[valid]
 
     if df.empty:
         return None
 
     latest = df.iloc[-1]
 
-    # -------- QUANT SWING CONDITIONS --------
+    # -------- SWING CONDITIONS --------
     trend = latest["Close"] > latest["SMA200"]
     institutional = latest["SMA50"] > latest["SMA200"]
     momentum_reset = 40 <= latest["RSI"] <= 65
