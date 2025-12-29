@@ -62,10 +62,19 @@ with tab1:
     )
 
 # -------------------- TAB 2: DETAILED ANALYSIS --------------------
-with tab2:
+ith tab2:
     if not selected_stock:
         st.info("Select a stock from Screener tab.")
         st.stop()
+
+    df = load_price_data(selected_stock)
+    if df is None or df.empty:
+        st.warning("No data available for this stock.")
+        st.stop()
+
+    # Flatten MultiIndex columns if present
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = ['_'.join([str(c) for c in col]).strip() for col in df.columns]
 
     # Load price data
     df = load_price_data(selected_stock)
