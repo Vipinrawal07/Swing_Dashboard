@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from time import sleep
 
 from data.loader import get_nse_stock_list, load_price_data
 from core.screener import swing_screen
@@ -23,17 +24,18 @@ with tab1:
     progress_text = st.empty()
     progress_bar = st.progress(0)
 
-    for i, ticker in enumerate(tickers[:300]):  # limit to first 300 for free tier
+    for i, ticker in enumerate(tickers[:300]):  # limit for free-tier stability
         progress_text.text(f"Scanning {ticker} ({i+1}/{len(tickers[:300])})")
         try:
             df = load_price_data(ticker)
             res = swing_screen(df)
             if res and res["SwingScore"] >= 60:
                 results.append({"Stock": ticker, **res})
-        except Exception as e:
+        except Exception:
             failed_tickers.append(ticker)
             continue
         progress_bar.progress((i + 1) / 300)
+        sleep(0.05)  # small pause to allow UI update
 
     if not results:
         st.info("No swing opportunities currently.")
@@ -81,7 +83,7 @@ with tab2:
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["SMA200"] = df["Close"].rolling(200).mean()
 
-    # Compute Swing Score metrics
+    # Extract metrics
     swing_score = metrics.get("SwingScore", None)
     rsi = metrics.get("RSI", None)
     close_val = metrics.get("Close", None)
@@ -89,15 +91,15 @@ with tab2:
     sma200_val = metrics.get("SMA200", None)
     atr_pct = metrics.get("ATR_pct", None)
 
+    # Compute composite sentiment
+    sent_score, sent_label = composite_sentiment(selected_stock)
+
     # Display metrics in 3 columns
     col1, col2, col3 = st.columns(3)
     with col1:
         if swing_score is not None:
             st.metric("Swing Score", swing_score)
     with col2:
-        # Compute composite sentiment using free Reddit + News
-        from core.sentiment import composite_sentiment
-        sent_score, sent_label = composite_sentiment(selected_stock)
         st.metric("Sentiment", sent_label, sent_score)
     with col3:
         if rsi is not None:
@@ -114,7 +116,10 @@ with tab2:
 
     # Additional info
     st.subheader("📌 Key Technical Metrics")
-    st.write(f"ATR %: {atr_pct}%")
+    st.write(f"ATR %: {atr_pct}")
     st.write(f"SMA50: {sma50_val}")
     st.write(f"SMA200: {sma200_val}")
     st.write(f"Last Close: {close_val}")
+
+    if failed_tickers:
+        st.info(f"⚠ Skipped tickers due to data issues: {len(failed_tickers)}")
