@@ -1,22 +1,36 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
 from time import sleep
 
-from data.loader import get_nse_stock_list, load_price_data
 from core.screener import swing_screen
 from core.sentiment import composite_sentiment
 
 st.set_page_config(layout="wide", page_title="Quant Swing Screener")
-
 st.title("📈 Quant Swing Trading Screener (1–3 Months)")
 st.caption("Trend intact • Momentum reset • Institutional bias")
 
 tab1, tab2 = st.tabs(["📊 Screener", "🔍 Detailed Analysis"])
 
+# -------------------- FUNCTIONS --------------------
+def get_nse_stock_list():
+    """Return list of NSE tickers (example, extend as needed)."""
+    return ["RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "INFY.NS"]
+
+def load_price_data(ticker):
+    """Download price data using yfinance."""
+    df = yf.download(ticker, period="2y", interval="1d")
+    # Flatten MultiIndex columns if present
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in df.columns]
+    # Ensure Close column exists
+    if "Close" not in df.columns and "Adj Close" in df.columns:
+        df["Close"] = df["Adj Close"]
+    return df
+
 # -------------------- TAB 1: SCREENER --------------------
 with tab1:
     st.subheader("🎯 Swing Trade Opportunities (All NSE Stocks)")
-
     tickers = get_nse_stock_list()
     results = []
     failed_tickers = []
@@ -24,17 +38,17 @@ with tab1:
     progress_text = st.empty()
     progress_bar = st.progress(0)
 
-    for i, ticker in enumerate(tickers[:300]):  # limit for free-tier stability
-        progress_text.text(f"Scanning {ticker} ({i+1}/{len(tickers[:300])})")
+    for i, ticker in enumerate(tickers):
+        progress_text.text(f"Scanning {ticker} ({i+1}/{len(tickers)})")
         try:
             df = load_price_data(ticker)
             res = swing_screen(df)
-            if res and res["SwingScore"] >= 60:
+            if res and res.get("SwingScore", 0) >= 60:
                 results.append({"Stock": ticker, **res})
         except Exception:
             failed_tickers.append(ticker)
             continue
-        progress_bar.progress((i + 1) / 300)
+        progress_bar.progress((i + 1) / len(tickers))
         sleep(0.05)  # small pause to allow UI update
 
     if not results:
@@ -43,6 +57,7 @@ with tab1:
 
     screen_df = pd.DataFrame(results).sort_values("SwingScore", ascending=False)
 
+    # Color coding SwingScore
     def color_score(val):
         if val >= 80:
             return "background-color:#1b5e20;color:white"
@@ -67,7 +82,6 @@ with tab2:
         st.info("Select a stock from Screener tab.")
         st.stop()
 
-    # Load price data
     df = load_price_data(selected_stock)
     metrics = swing_screen(df)
 
@@ -75,20 +89,17 @@ with tab2:
         st.warning("Data unavailable for this stock.")
         st.stop()
 
-    # Ensure Close column exists
-    if "Close" not in df.columns and "Adj Close" in df.columns:
-        df["Close"] = df["Adj Close"]
-
     # Compute SMAs safely
-    df["SMA50"] = df["Close"].rolling(50).mean()
-    df["SMA200"] = df["Close"].rolling(200).mean()
+    if "Close" in df.columns:
+        df["SMA50"] = df["Close"].rolling(50).mean()
+        df["SMA200"] = df["Close"].rolling(200).mean()
 
     # Extract metrics
     swing_score = metrics.get("SwingScore", None)
     rsi = metrics.get("RSI", None)
-    close_val = metrics.get("Close", None)
-    sma50_val = metrics.get("SMA50", None)
-    sma200_val = metrics.get("SMA200", None)
+    close_val = df["Close"].iloc[-1] if "Close" in df.columns else None
+    sma50_val = df["SMA50"].iloc[-1] if "SMA50" in df.columns else None
+    sma200_val = df["SMA200"].iloc[-1] if "SMA200" in df.columns else None
     atr_pct = metrics.get("ATR_pct", None)
 
     # Compute composite sentiment
@@ -107,19 +118,16 @@ with tab2:
 
     st.subheader("📊 Price Trend with Key Averages")
 
-# Safe plotting of Close + SMA50/200
-plot_columns = ["Close", "SMA50", "SMA200"]
-existing_columns = [col for col in plot_columns if col in df.columns]
-
-if not existing_columns:
-    st.warning("No valid columns to plot for this stock.")
-else:
-    plot_df = df[existing_columns].dropna()
-    if plot_df.empty:
-        st.warning("Not enough data to plot SMA50/200 for this stock.")
+    # Safe plotting of Close + SMA50/200
+    plot_columns = [col for col in ["Close", "SMA50", "SMA200"] if col in df.columns]
+    if not plot_columns:
+        st.warning("No valid columns to plot for this stock.")
     else:
-        st.line_chart(plot_df)
-
+        plot_df = df[plot_columns].dropna()
+        if plot_df.empty:
+            st.warning("Not enough data to plot SMA50/200 for this stock.")
+        else:
+            st.line_chart(plot_df)
 
     # Additional info
     st.subheader("📌 Key Technical Metrics")
