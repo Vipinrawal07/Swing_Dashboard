@@ -2,9 +2,5 @@ streamlit
 yfinance
 pandas
 numpy
-plotly
-vaderSentiment
 feedparser
-snscrape
-requests
-beautifulsoup4
+vaderSentiment
