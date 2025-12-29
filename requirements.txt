@@ -3,7 +3,8 @@ yfinance
 pandas
 numpy
 plotly
-textblob
 vaderSentiment
+feedparser
+snscrape
 requests
 beautifulsoup4
