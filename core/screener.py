@@ -1,59 +1,86 @@
 import pandas as pd
 import numpy as np
 
-def compute_rsi(series, period=14):
-    delta = series.diff()
+
+def compute_rsi(close, period=14):
+    delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
+
     avg_gain = gain.rolling(period).mean()
     avg_loss = loss.rolling(period).mean()
+
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
 
-def compute_atr(df, period=14):
+def compute_atr(high, low, close, period=14):
     tr = pd.concat([
-        df["High"] - df["Low"],
-        (df["High"] - df["Close"].shift()).abs(),
-        (df["Low"] - df["Close"].shift()).abs()
+        high - low,
+        (high - close.shift()).abs(),
+        (low - close.shift()).abs()
     ], axis=1).max(axis=1)
+
     return tr.rolling(period).mean()
 
 
 def swing_screen(df):
-    if df is None or df.empty or len(df) < 250:
+    # -------- SAFETY CHECKS --------
+    if df is None or df.empty:
+        return None
+
+    if len(df) < 220:
         return None
 
     df = df.copy()
 
-    df["SMA50"] = df["Close"].rolling(50).mean()
-    df["SMA200"] = df["Close"].rolling(200).mean()
-    df["RSI"] = compute_rsi(df["Close"])
-    df["ATR"] = compute_atr(df)
-    df["ATR_pct"] = df["ATR"] / df["Close"]
-    df["Vol_Avg"] = df["Volume"].rolling(20).mean()
+    # -------- FORCE SERIES (CRITICAL FIX) --------
+    close = df["Close"].squeeze()
+    high = df["High"].squeeze()
+    low = df["Low"].squeeze()
+    volume = df["Volume"].squeeze()
+
+    # -------- INDICATORS --------
+    df["SMA50"] = close.rolling(50).mean()
+    df["SMA200"] = close.rolling(200).mean()
+    df["RSI"] = compute_rsi(close)
+    df["ATR"] = compute_atr(high, low, close)
+
+    # % ATR (risk control)
+    df["ATR_pct"] = df["ATR"].div(close)
+
+    # Volume confirmation
+    df["Vol_Avg"] = volume.rolling(20).mean()
+
+    # -------- DROP NANs SAFELY --------
+    required_cols = ["SMA50", "SMA200", "RSI", "ATR_pct", "Vol_Avg"]
+    df = df.dropna(subset=required_cols)
+
+    if df.empty:
+        return None
 
     latest = df.iloc[-1]
 
+    # -------- QUANT SWING CONDITIONS --------
     trend = latest["Close"] > latest["SMA200"]
     institutional = latest["SMA50"] > latest["SMA200"]
     momentum_reset = 40 <= latest["RSI"] <= 65
-    liquidity = latest["Volume"] > latest["Vol_Avg"]
-    risk_ok = latest["ATR_pct"] < 0.05
+    volume_confirm = latest["Volume"] > latest["Vol_Avg"]
+    controlled_risk = latest["ATR_pct"] < 0.05
 
-    score = (
+    swing_score = (
         25 * trend +
         25 * institutional +
         20 * momentum_reset +
-        15 * liquidity +
-        15 * risk_ok
+        15 * volume_confirm +
+        15 * controlled_risk
     )
 
     return {
-        "Close": round(latest["Close"], 2),
-        "RSI": round(latest["RSI"], 1),
-        "SMA50": round(latest["SMA50"], 2),
-        "SMA200": round(latest["SMA200"], 2),
-        "ATR_pct": round(latest["ATR_pct"] * 100, 2),
-        "SwingScore": score
+        "Close": round(float(latest["Close"]), 2),
+        "RSI": round(float(latest["RSI"]), 1),
+        "SMA50": round(float(latest["SMA50"]), 2),
+        "SMA200": round(float(latest["SMA200"]), 2),
+        "ATR_pct": round(float(latest["ATR_pct"]) * 100, 2),
+        "SwingScore": int(swing_score)
     }
