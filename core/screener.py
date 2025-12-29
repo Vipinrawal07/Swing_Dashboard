@@ -1,23 +1,37 @@
-def swing_screen(df, index_df=None):
-    # Ensure required columns exist
-    required_cols = ["Close", "Volume"]
-    for col in required_cols:
-        if col not in df.columns:
-            return df
+import pandas as pd
 
-    # Technical indicators
+def compute_rsi(series, period=14):
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(period).mean()
+    avg_loss = loss.rolling(period).mean()
+
+    rs = avg_gain / avg_loss
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
+def swing_screen(df, index_df=None):
+    if df is None or df.empty:
+        return df
+
+    if "Close" not in df.columns:
+        return df
+
+    # Indicators
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["SMA200"] = df["Close"].rolling(200).mean()
     df["RSI"] = compute_rsi(df["Close"])
 
-    # Drop rows where indicators are not ready
+    # Remove NaN rows
     df = df.dropna(subset=["SMA50", "SMA200", "RSI"])
 
-    # Safety check
     if df.empty:
         return df
 
-    # Swing conditions
+    # Swing logic
     df["SwingSignal"] = (
         (df["Close"] > df["SMA200"]) &
         (df["SMA50"] > df["SMA200"]) &
