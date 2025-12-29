@@ -20,13 +20,19 @@ def swing_screen(df, index_df=None):
     if "Close" not in df.columns:
         return df
 
-    # Indicators
+    # Create indicators safely
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["SMA200"] = df["Close"].rolling(200).mean()
     df["RSI"] = compute_rsi(df["Close"])
 
-    # Remove NaN rows
-    df = df.dropna(subset=["SMA50", "SMA200", "RSI"])
+    # Only drop NaNs for columns that actually exist
+    required_cols = ["SMA50", "SMA200", "RSI"]
+    existing_cols = [c for c in required_cols if c in df.columns]
+
+    if not existing_cols:
+        return df
+
+    df = df.dropna(subset=existing_cols)
 
     if df.empty:
         return df
