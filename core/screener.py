@@ -15,34 +15,25 @@ def compute_rsi(series, period=14):
 
 def swing_screen(df, index_df=None):
     if df is None or df.empty:
-        return df
+        return pd.DataFrame()
 
     if "Close" not in df.columns:
-        return df
+        return pd.DataFrame()
 
-    # Create indicators safely
+    # Indicators
+    df = df.copy()
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["SMA200"] = df["Close"].rolling(200).mean()
     df["RSI"] = compute_rsi(df["Close"])
 
-    # Only drop NaNs for columns that actually exist
-    required_cols = ["SMA50", "SMA200", "RSI"]
-    existing_cols = [c for c in required_cols if c in df.columns]
-
-    if not existing_cols:
-        return df
-
-    df = df.dropna(subset=existing_cols)
-
-    if df.empty:
-        return df
-
-    # Swing logic
-    df["SwingSignal"] = (
+    # Boolean mask (this auto-handles NaNs safely)
+    mask = (
         (df["Close"] > df["SMA200"]) &
         (df["SMA50"] > df["SMA200"]) &
         (df["RSI"] > 40) &
         (df["RSI"] < 70)
     )
+
+    df["SwingSignal"] = mask.fillna(False)
 
     return df
