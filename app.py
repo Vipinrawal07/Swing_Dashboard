@@ -65,6 +65,7 @@ with tab2:
         st.info("Select a stock from Screener tab.")
         st.stop()
 
+    # Load price data
     df = load_price_data(selected_stock)
     metrics = swing_screen(df)
 
@@ -72,7 +73,7 @@ with tab2:
         st.warning("Data unavailable for this stock.")
         st.stop()
 
-    # Force Close column
+    # Ensure Close column exists
     if "Close" not in df.columns and "Adj Close" in df.columns:
         df["Close"] = df["Adj Close"]
 
@@ -80,9 +81,40 @@ with tab2:
     df["SMA50"] = df["Close"].rolling(50).mean()
     df["SMA200"] = df["Close"].rolling(200).mean()
 
-    # Metrics display
+    # Compute Swing Score metrics
+    swing_score = metrics.get("SwingScore", None)
+    rsi = metrics.get("RSI", None)
+    close_val = metrics.get("Close", None)
+    sma50_val = metrics.get("SMA50", None)
+    sma200_val = metrics.get("SMA200", None)
+    atr_pct = metrics.get("ATR_pct", None)
+
+    # Display metrics in 3 columns
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Swing Score", metrics["SwingScore"])
+        if swing_score is not None:
+            st.metric("Swing Score", swing_score)
     with col2:
-        sent_score, sent_label
+        # Compute composite sentiment using free Reddit + News
+        from core.sentiment import composite_sentiment
+        sent_score, sent_label = composite_sentiment(selected_stock)
+        st.metric("Sentiment", sent_label, sent_score)
+    with col3:
+        if rsi is not None:
+            st.metric("RSI", rsi)
+
+    st.subheader("📊 Price Trend with Key Averages")
+
+    # Safe plotting of Close + SMA50/200
+    plot_df = df[["Close", "SMA50", "SMA200"]].dropna()
+    if not plot_df.empty:
+        st.line_chart(plot_df)
+    else:
+        st.warning("Not enough data to plot SMA50/200 for this stock.")
+
+    # Additional info
+    st.subheader("📌 Key Technical Metrics")
+    st.write(f"ATR %: {atr_pct}%")
+    st.write(f"SMA50: {sma50_val}")
+    st.write(f"SMA200: {sma200_val}")
+    st.write(f"Last Close: {close_val}")
