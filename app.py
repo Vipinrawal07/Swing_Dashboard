@@ -107,12 +107,19 @@ with tab2:
 
     st.subheader("📊 Price Trend with Key Averages")
 
-    # Safe plotting of Close + SMA50/200
-    plot_df = df[["Close", "SMA50", "SMA200"]].dropna()
-    if not plot_df.empty:
-        st.line_chart(plot_df)
-    else:
+# Safe plotting of Close + SMA50/200
+plot_columns = ["Close", "SMA50", "SMA200"]
+existing_columns = [col for col in plot_columns if col in df.columns]
+
+if not existing_columns:
+    st.warning("No valid columns to plot for this stock.")
+else:
+    plot_df = df[existing_columns].dropna()
+    if plot_df.empty:
         st.warning("Not enough data to plot SMA50/200 for this stock.")
+    else:
+        st.line_chart(plot_df)
+
 
     # Additional info
     st.subheader("📌 Key Technical Metrics")
