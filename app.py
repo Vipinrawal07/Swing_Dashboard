@@ -62,7 +62,7 @@ with tab1:
     )
 
 # -------------------- TAB 2: DETAILED ANALYSIS --------------------
-ith tab2:
+with tab2:
     if not selected_stock:
         st.info("Select a stock from Screener tab.")
         st.stop()
