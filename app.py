@@ -25,7 +25,12 @@ index_df = yf.download(config.INDEX_SYMBOL, start=config.START_DATE)
 
 df = swing_screen(df, index_df)
 sent, tw, rd, nw = composite_sentiment(asset)
+if df is None or df.empty:
+    st.warning("No valid swing setup found for this stock.")
+    st.stop()
+
 latest = df.iloc[-1]
+
 score = swing_score(latest, sent)
 
 with tabs[0]:
